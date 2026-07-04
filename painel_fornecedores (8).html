@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Fornecedores</title>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F5F6F4;
+  --panel:#FFFFFF;
+  --ink:#14231C;
+  --ink-soft:#5B6960;
+  --line:#E1E4DE;
+  --accent:#1F5D4A;
+  --accent-soft:#E4EFE9;
+  --amber:#B4791F;
+  --amber-soft:#FBF0DD;
+  --red:#B23A2E;
+  --red-soft:#FBE7E3;
+  --blue:#2C5A8C;
+  --blue-soft:#E6EEF6;
+  --radius:10px;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);}
+h1,h2,h3,.mono{font-family:'Space Grotesk',sans-serif;}
+.figure{font-family:'IBM Plex Mono',monospace;}
+
+/* LAYOUT */
+#app{display:grid;grid-template-columns:236px 1fr;min-height:100vh;}
+.sidebar{background:#12201A;color:#DCE8E1;padding:24px 16px;display:flex;flex-direction:column;gap:4px;}
+.brand{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;color:#fff;padding:0 12px 20px;letter-spacing:.2px;}
+.brand span{color:#7FC9A3;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:14px;color:#B7C6BE;transition:.15s;}
+.nav-item:hover{background:#1A2C23;color:#fff;}
+.nav-item.active{background:#1F5D4A;color:#fff;}
+.nav-icon{width:16px;text-align:center;font-size:14px;}
+.main{padding:28px 34px;overflow-x:hidden;}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;}
+.topbar h1{font-size:22px;margin:0;}
+.topbar .sub{color:var(--ink-soft);font-size:13px;margin-top:2px;}
+.btn{background:var(--accent);color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter';}
+.btn:hover{background:#164938;}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent);}
+.btn.ghost:hover{background:var(--accent-soft);}
+.btn.danger{background:var(--red);}
+.btn.small{padding:5px 10px;font-size:12px;}
+
+/* CARDS */
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;}
+.card .label{font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between;align-items:center;}
+.card .value{font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;margin-top:8px;}
+.card .foot{font-size:11px;color:var(--ink-soft);margin-top:4px;}
+.card.alert .value{color:var(--red);}
+.card.warn .value{color:var(--amber);}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;}
+.dot.g{background:var(--accent);} .dot.a{background:var(--amber);} .dot.r{background:var(--red);}
+
+/* PANELS / CHARTS */
+.grid-2{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-bottom:16px;}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;}
+.panel h3{font-size:14px;margin:0 0 14px;display:flex;justify-content:space-between;align-items:center;}
+.panel h3 small{color:var(--ink-soft);font-weight:500;font-family:'Inter';font-size:11px;}
+canvas{max-height:230px;}
+
+/* TABLE */
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;color:var(--ink-soft);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:1px solid var(--line);}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle;}
+tr:hover td{background:#FAFBF9;}
+tr.clickable{cursor:pointer;}
+.badge{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:600;display:inline-block;}
+.badge.green{background:var(--accent-soft);color:var(--accent);}
+.badge.amber{background:var(--amber-soft);color:var(--amber);}
+.badge.red{background:var(--red-soft);color:var(--red);}
+.badge.blue{background:var(--blue-soft);color:var(--blue);}
+.badge.gray{background:#EDEEEA;color:#6B776F;}
+
+/* TOOLBAR */
+.toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
+input,select,textarea{font-family:'Inter';border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;color:var(--ink);}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent);}
+.search{flex:1;min-width:200px;}
+
+/* MODAL / DRAWER */
+.overlay{position:fixed;inset:0;background:rgba(18,32,26,.45);display:none;align-items:stretch;justify-content:flex-end;z-index:50;}
+.overlay.open{display:flex;}
+.drawer{background:var(--bg);width:min(760px,94vw);height:100%;overflow-y:auto;padding:28px 32px;box-shadow:-6px 0 24px rgba(0,0,0,.12);}
+.drawer-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;}
+.close-x{background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft);}
+.modal-overlay{position:fixed;inset:0;background:rgba(18,32,26,.45);display:none;align-items:center;justify-content:center;z-index:60;}
+.modal-overlay.open{display:flex;}
+.modal{background:#fff;border-radius:12px;padding:26px 28px;width:min(480px,92vw);max-height:88vh;overflow-y:auto;}
+.field{margin-bottom:12px;display:flex;flex-direction:column;gap:5px;}
+.field label{font-size:12px;color:var(--ink-soft);font-weight:600;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:18px 0 14px;}
+.tab{padding:8px 14px;font-size:13px;cursor:pointer;color:var(--ink-soft);border-bottom:2px solid transparent;}
+.tab.active{color:var(--accent);border-color:var(--accent);font-weight:600;}
+.empty{text-align:center;padding:30px 10px;color:var(--ink-soft);font-size:13px;}
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.score-num{font-family:'IBM Plex Mono';font-weight:600;font-size:30px;}
+.section-title{font-size:15px;font-weight:700;margin:0 0 10px;}
+.mini-actions{display:flex;gap:6px;}
+.config-banner{background:var(--amber-soft);border:1px solid #EAD6A8;color:#7A5717;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;display:none;}
+
+/* CARDS DE SELEÇÃO DE FORNECEDOR */
+.fcard-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:10px;margin-bottom:18px;}
+.fcard{min-width:150px;flex-shrink:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer;transition:.15s;}
+.fcard:hover{border-color:var(--accent);}
+.fcard.active{border-color:var(--accent);background:var(--accent-soft);}
+.fcard .fname{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
+.fcard .fval{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;margin-top:6px;}
+.fcard .fqtd{font-size:11px;color:var(--ink-soft);margin-top:2px;}
+.fcard.all{background:#12201A;border-color:#12201A;}
+.fcard.all .fname, .fcard.all .fval{color:#fff;}
+.fcard.all .fqtd{color:#B7C6BE;}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="sidebar">
+    <div class="brand">Painel<span>Fornecedores</span></div>
+    <div class="nav-item active" data-view="dashboard"><span class="nav-icon">◧</span> Dashboard</div>
+    <div class="nav-item" data-view="fornecedores"><span class="nav-icon">◨</span> Fornecedores</div>
+    <div class="nav-item" data-view="nfdview"><span class="nav-icon">⎘</span> Indicador NFD</div>
+    <div class="nav-item" data-view="importnfd"><span class="nav-icon">⇩</span> Importar NFDs</div>
+    <div class="nav-item" data-view="xped"><span class="nav-icon">◫</span> Importar XPED</div>
+  </div>
+
+  <div class="main">
+    <div id="configBanner" class="config-banner">⚠ Configure a conexão com o Supabase no início do arquivo (CONFIG.SUPABASE_URL / SUPABASE_ANON_KEY) para os dados serem salvos de verdade. Por enquanto está em modo demonstração local.</div>
+
+    <!-- ===================== DASHBOARD ===================== -->
+    <div id="view-dashboard">
+      <div class="topbar">
+        <div>
+          <h1>Dashboard</h1>
+          <div class="sub" id="dashSub">Visão geral da conformidade dos fornecedores</div>
+        </div>
+        <button class="btn ghost" onclick="exportExcelGeral()">Exportar Excel</button>
+      </div>
+
+      <div class="cards" id="cardsRow"></div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Evolução mensal de NFDs <small>últimos 6 meses</small></h3>
+          <canvas id="chartNfd"></canvas>
+        </div>
+        <div class="panel">
+          <h3>Conformidade por indicador</h3>
+          <canvas id="chartConformidade"></canvas>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Ranking — mais pendências <small>top 6</small></h3>
+          <canvas id="chartRankingPend"></canvas>
+        </div>
+        <div class="panel">
+          <h3>Ranking — mais eficientes <small>top 6</small></h3>
+          <canvas id="chartRankingEfic"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== FORNECEDORES ===================== -->
+    <div id="view-fornecedores" style="display:none;">
+      <div class="topbar">
+        <div>
+          <h1>Fornecedores</h1>
+          <div class="sub">Cadastro, score de eficiência e histórico de pendências</div>
+        </div>
+        <button class="btn" onclick="openFornecedorModal()">+ Novo fornecedor</button>
+      </div>
+
+      <div class="toolbar">
+        <input class="search" id="fSearch" placeholder="Buscar por nome ou código..." oninput="renderFornecedoresTable()">
+        <select id="fStatus" onchange="renderFornecedoresTable()">
+          <option value="">Todos os status</option>
+          <option value="Ativo">Ativo</option>
+          <option value="Inativo">Inativo</option>
+        </select>
+        <select id="fClass" onchange="renderFornecedoresTable()">
+          <option value="">Todas as classificações</option>
+          <option value="Excelente">Excelente</option>
+          <option value="Bom">Bom</option>
+          <option value="Atenção">Atenção</option>
+          <option value="Crítico">Crítico</option>
+        </select>
+      </div>
+
+      <div class="panel">
+        <table>
+          <thead><tr>
+            <th>Código</th><th>Nome</th><th>Comprador</th><th>Categoria</th>
+            <th>Status</th><th>Score</th><th>Classificação</th><th></th>
+          </tr></thead>
+          <tbody id="fornecedoresTbody"></tbody>
+        </table>
+        <div id="fornecedoresEmpty" class="empty" style="display:none;">Nenhum fornecedor encontrado.</div>
+      </div>
+    </div>
+
+    <!-- ===================== INDICADOR NFD ===================== -->
+    <div id="view-nfdview" style="display:none;">
+      <div class="topbar">
+        <div>
+          <h1>Indicador — NFD</h1>
+          <div class="sub">Notas Fiscais de Devolução: valores, tratativas negociadas e prazos de resolução</div>
+        </div>
+        <button class="btn" onclick="openNfdModal(true)">+ Nova NFD</button>
+      </div>
+
+      <div class="cards" id="nfdCardsRow" style="grid-template-columns:repeat(4,1fr);"></div>
+
+      <h3 style="font-size:13px;color:var(--ink-soft);margin:0 0 8px;">Selecionar fornecedor</h3>
+      <div class="fcard-row" id="nfdFornecedorCards"></div>
+
+      <div class="toolbar">
+        <input class="search" id="nfdSearch" placeholder="Buscar por fornecedor ou número da NFD..." oninput="renderNfdView()">
+        <select id="nfdSituacaoFiltro" onchange="renderNfdView()">
+          <option value="">Todas as situações</option>
+          <option value="Pendente">Pendente</option>
+          <option value="Em negociação">Em negociação</option>
+          <option value="Pago">Pago</option>
+        </select>
+        <select id="nfdPrazoFiltro" onchange="renderNfdView()">
+          <option value="">Todos os prazos</option>
+          <option value="vencida">Tratativa vencida</option>
+          <option value="a_vencer">Tratativa a vencer (7d)</option>
+        </select>
+        <button class="btn ghost small" id="btnAplicarTratativaLote" style="display:none;" onclick="openTratativaLoteModal()">Aplicar tratativa e prazo aos selecionados (<span id="qtdSelecionadasNfd">0</span>)</button>
+      </div>
+
+      <div class="panel">
+        <table>
+          <thead><tr>
+            <th style="width:28px;"><input type="checkbox" id="nfdSelectAll" onchange="toggleSelectAllNfd(this.checked)"></th>
+            <th>Fornecedor</th><th>Nº NFD</th><th>Filial</th><th>Nota de Origem</th><th>Emissão</th><th>Valor</th><th>Situação</th>
+            <th>Tratativa negociada</th><th>Prazo de resolução</th><th></th>
+          </tr></thead>
+          <tbody id="nfdViewTbody"></tbody>
+        </table>
+        <div id="nfdViewEmpty" class="empty" style="display:none;">Nenhuma NFD encontrada.</div>
+      </div>
+    </div>
+
+    <!-- ===================== NFD IMPORT ===================== -->
+    <div id="view-importnfd" style="display:none;">
+      <div class="topbar">
+        <div>
+          <h1>Importar NFDs</h1>
+          <div class="sub">Importe direto o relatório "DETALHAMENTO" (export de NFDs) — as colunas são reconhecidas automaticamente</div>
+        </div>
+      </div>
+      <div class="panel">
+        <input type="file" id="nfdFile" accept=".xlsx,.xls,.csv" onchange="handleNfdImport(event)">
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:10px;">
+          Colunas esperadas: Filial NFD, Código, Cód. Fornecedor, Descrição, Fornecedor, CGC, Comprador, Data, Filial NFO, Nota de Origem,
+          Nota de Devolução, Valor Unitário, Quantidade, Valor Total, IPI, Observação, Possui Imagem?, E-mail Enviado, Destinatários, Primeiro E-mail, Último E-mail.<br>
+          Fornecedores são agrupados por <strong>nome</strong> — se a planilha trouxer vários códigos de ERP para o mesmo nome (ex: KRONA), tudo cai no mesmo cadastro.
+          Cada <strong>NFD é uma nota</strong>: se a planilha tiver várias linhas com o mesmo número (um item por produto), o sistema soma os valores e junta tudo em um único registro.
+          NFDs já importadas (mesmo número + fornecedor) não são duplicadas. Toda NFD nova entra como <strong>Pendente</strong> — depois você atualiza o status pelo painel do fornecedor.
+        </p>
+        <div id="nfdImportLog" style="margin-top:14px;"></div>
+      </div>
+    </div>
+
+    <!-- ===================== XPED IMPORT ===================== -->
+    <div id="view-xped" style="display:none;">
+      <div class="topbar">
+        <div>
+          <h1>Importar XPED</h1>
+          <div class="sub">Relatório diário de ocorrências — importe um Excel/CSV com colunas: Data, Produto, Codigo, Fornecedor (código), Motivo</div>
+        </div>
+      </div>
+      <div class="panel">
+        <input type="file" id="xpedFile" accept=".xlsx,.xls,.csv" onchange="handleXpedImport(event)">
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:10px;">O sistema busca o fornecedor pelo código informado na planilha. Fornecedores não encontrados serão listados abaixo.</p>
+        <div id="xpedImportLog" style="margin-top:14px;"></div>
+      </div>
+      <div class="panel" style="margin-top:16px;">
+        <h3>Ocorrências recentes (30 dias)</h3>
+        <table>
+          <thead><tr><th>Data</th><th>Fornecedor</th><th>Produto</th><th>Código</th><th>Motivo</th></tr></thead>
+          <tbody id="xpedTbody"></tbody>
+        </table>
+        <div id="xpedEmpty" class="empty" style="display:none;">Nenhuma ocorrência registrada.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== DRAWER: DETALHE FORNECEDOR ===================== -->
+<div class="overlay" id="drawerOverlay">
+  <div class="drawer">
+    <div class="drawer-head">
+      <div>
+        <h2 id="drawerNome" style="margin:0;"></h2>
+        <div class="sub" id="drawerSub" style="color:var(--ink-soft);font-size:13px;"></div>
+      </div>
+      <button class="close-x" onclick="closeDrawer()">✕</button>
+    </div>
+
+    <div style="display:flex;gap:20px;align-items:center;margin-top:14px;">
+      <div class="gauge-wrap">
+        <canvas id="gaugeCanvas" width="120" height="120"></canvas>
+        <div id="gaugeScore" class="score-num">100</div>
+        <span id="gaugeBadge" class="badge green">Excelente</span>
+      </div>
+      <div style="flex:1;">
+        <div class="field"><label>Motivo da pontuação</label>
+          <div id="scoreBreakdown" style="font-size:12.5px;color:var(--ink-soft);line-height:1.7;"></div>
+        </div>
+      </div>
+      <button class="btn ghost small" onclick="editFornecedorFromDrawer()">Editar cadastro</button>
+    </div>
+
+    <div class="tabs" id="drawerTabs">
+      <div class="tab active" data-tab="nfd">NFD</div>
+      <div class="tab" data-tab="debitos">Débitos</div>
+      <div class="tab" data-tab="tabela">Tabela de Preços</div>
+      <div class="tab" data-tab="embalagem">Embalagem Master</div>
+      <div class="tab" data-tab="xped">XPED</div>
+    </div>
+
+    <div id="tabContent"></div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: FORNECEDOR ===================== -->
+<div class="modal-overlay" id="modalFornecedor">
+  <div class="modal">
+    <h3 id="modalFornecedorTitle">Novo fornecedor</h3>
+    <div class="field"><label>Código</label><input id="mf_codigo"></div>
+    <div class="field"><label>Nome</label><input id="mf_nome"></div>
+    <div class="row2">
+      <div class="field"><label>Comprador responsável</label><input id="mf_comprador"></div>
+      <div class="field"><label>Categoria</label><input id="mf_categoria"></div>
+    </div>
+    <div class="field"><label>Status</label>
+      <select id="mf_status"><option>Ativo</option><option>Inativo</option></select>
+    </div>
+    <div class="field"><label>Observações</label><textarea id="mf_obs" rows="2"></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
+      <button class="btn ghost" onclick="closeModal('modalFornecedor')">Cancelar</button>
+      <button class="btn" onclick="saveFornecedor()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: NFD ===================== -->
+<div class="modal-overlay" id="modalNfd">
+  <div class="modal">
+    <h3>Nota Fiscal de Devolução</h3>
+    <div class="field" id="mn_fornecedor_wrap" style="display:none;">
+      <label>Fornecedor</label>
+      <select id="mn_fornecedor"></select>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Número da NFD</label><input id="mn_numero"></div>
+      <div class="field"><label>Data de emissão</label><input type="date" id="mn_data"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Valor (R$)</label><input type="number" step="0.01" id="mn_valor"></div>
+      <div class="field"><label>Situação</label>
+        <select id="mn_situacao"><option>Pendente</option><option>Pago</option><option>Em negociação</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Motivo</label><input id="mn_motivo"></div>
+    <div id="mn_importado_info" style="display:none;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--ink-soft);line-height:1.6;"></div>
+    <div class="row2">
+      <div class="field"><label>Tratativa negociada</label><input id="mn_tratativa" placeholder="Ex: fornecedor vai emitir crédito em 15 dias"></div>
+      <div class="field"><label>Prazo de resolução</label><input type="date" id="mn_prazo"></div>
+    </div>
+    <div id="mn_pagamento_fields" style="display:none;">
+      <div class="row2">
+        <div class="field"><label>Data do pagamento</label><input type="date" id="mn_data_pgto"></div>
+        <div class="field"><label>Observação</label><input id="mn_obs_pgto"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
+      <button class="btn ghost" onclick="closeModal('modalNfd')">Cancelar</button>
+      <button class="btn" onclick="saveNfd()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: DÉBITO ===================== -->
+<div class="modal-overlay" id="modalDebito">
+  <div class="modal">
+    <h3>Débito</h3>
+    <div class="row2">
+      <div class="field"><label>Número do débito</label><input id="md_numero"></div>
+      <div class="field"><label>Data de emissão</label><input type="date" id="md_data" onchange="calcVencimento()"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Valor (R$)</label><input type="number" step="0.01" id="md_valor"></div>
+      <div class="field"><label>Vencimento (30 dias)</label><input type="date" id="md_venc"></div>
+    </div>
+    <div class="field"><label>Motivo</label><input id="md_motivo"></div>
+    <div class="field"><label>Status</label>
+      <select id="md_status" onchange="toggleResolucaoFields()"><option>Em aberto</option><option>Resolvido</option></select>
+    </div>
+    <div id="md_resolucao_fields" style="display:none;">
+      <div class="row2">
+        <div class="field"><label>Tipo de resolução</label>
+          <select id="md_tipo_res"><option>Pedido bonificado</option><option>Desconto em duplicata</option></select>
+        </div>
+        <div class="field"><label>Data</label><input type="date" id="md_data_res"></div>
+      </div>
+      <div class="field"><label>Observação</label><input id="md_obs_res"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
+      <button class="btn ghost" onclick="closeModal('modalDebito')">Cancelar</button>
+      <button class="btn" onclick="saveDebito()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: TRATATIVA EM LOTE ===================== -->
+<div class="modal-overlay" id="modalTratativaLote">
+  <div class="modal">
+    <h3>Aplicar tratativa e prazo</h3>
+    <p style="font-size:12.5px;color:var(--ink-soft);margin-top:-6px;">Isso vai atualizar a tratativa negociada e o prazo de resolução de <strong id="qtdSelecionadasLote">0</strong> NFD(s) selecionada(s).</p>
+    <div class="field"><label>Tratativa negociada</label><textarea id="ml_tratativa" rows="2" placeholder="Ex: fornecedor consolidou as notas e vai emitir crédito único em 20 dias"></textarea></div>
+    <div class="row2">
+      <div class="field"><label>Prazo de resolução</label><input type="date" id="ml_prazo"></div>
+      <div class="field"><label>Situação</label>
+        <select id="ml_situacao">
+          <option value="">Não alterar</option>
+          <option value="Pendente">Pendente</option>
+          <option value="Em negociação">Em negociação</option>
+          <option value="Pago">Pago</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
+      <button class="btn ghost" onclick="closeModal('modalTratativaLote')">Cancelar</button>
+      <button class="btn" onclick="aplicarTratativaLote()">Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: TABELA DE PREÇOS ===================== -->
+<div class="modal-overlay" id="modalTabela">
+  <div class="modal">
+    <h3>Tabela de Preços</h3>
+    <div class="row2">
+      <div class="field"><label>Data da última atualização</label><input type="date" id="mt_data"></div>
+      <div class="field"><label>Validade</label><input type="date" id="mt_validade"></div>
+    </div>
+    <div class="field"><label>Responsável pela atualização</label><input id="mt_resp"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
+      <button class="btn ghost" onclick="closeModal('modalTabela')">Cancelar</button>
+      <button class="btn" onclick="saveTabela()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIGURAÇÃO — troque pelos dados do SEU projeto Supabase
+   (crie um projeto novo e rode o schema_fornecedores.sql nele)
+   ============================================================ */
+const CONFIG = {
+  SUPABASE_URL: "COLOQUE_AQUI_SUA_URL_SUPABASE",
+  SUPABASE_ANON_KEY: "COLOQUE_AQUI_SUA_ANON_KEY"
+};
+
+let supa = null;
+let DEMO_MODE = true;
+try {
+  if (CONFIG.SUPABASE_URL.startsWith("http") && CONFIG.SUPABASE_ANON_KEY.length > 20) {
+    supa = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+    DEMO_MODE = false;
+  }
+} catch(e) { DEMO_MODE = true; }
+
+if (DEMO_MODE) document.getElementById('configBanner').style.display = 'block';
+
+/* ============================================================
+   ESTADO LOCAL (espelha as tabelas do banco)
+   ============================================================ */
+let DB = {
+  fornecedores: [],
+  nfds: [],
+  debitos: [],
+  tabelas_precos: [],
+  embalagem_master: [],
+  xped_ocorrencias: []
+};
+
+function uid(){ return 'id_' + Math.random().toString(36).slice(2,10); }
+
+/* ---------- Seed de demonstração (só usado em modo demo) ---------- */
+function seedDemo(){
+  const f1 = {id:uid(), codigo:'F001', nome:'Distribuidora Atlântico Ltda', comprador_responsavel:'Marina Alves', categoria:'Alimentos', status:'Ativo', observacoes:''};
+  const f2 = {id:uid(), codigo:'F002', nome:'Industrial Cabo Ltda', comprador_responsavel:'João Prado', categoria:'Higiene', status:'Ativo', observacoes:''};
+  const f3 = {id:uid(), codigo:'F003', nome:'Comercial Recife Norte', comprador_responsavel:'Marina Alves', categoria:'Bebidas', status:'Ativo', observacoes:''};
+  DB.fornecedores = [f1,f2,f3];
+
+  const today = new Date();
+  const d = (offset) => { const dt = new Date(today); dt.setDate(dt.getDate()+offset); return dt.toISOString().slice(0,10); };
+
+  DB.nfds = [
+    {id:uid(), fornecedor_id:f1.id, numero_nfd:'NFD-1042', data_emissao:d(-40), valor:1850.00, motivo:'Produto avariado', situacao:'Pendente'},
+    {id:uid(), fornecedor_id:f2.id, numero_nfd:'NFD-1055', data_emissao:d(-20), valor:920.50, motivo:'Divergência de pedido', situacao:'Pendente'},
+    {id:uid(), fornecedor_id:f1.id, numero_nfd:'NFD-0987', data_emissao:d(-70), valor:640.00, motivo:'Vencimento próximo', situacao:'Pago', data_pagamento:d(-50)},
+  ];
+  DB.debitos = [
+    {id:uid(), fornecedor_id:f2.id, numero_debito:'DEB-220', data_emissao:d(-25), valor:3200.00, motivo:'Acordo comercial trimestral', data_vencimento:d(5), status:'Em aberto'},
+    {id:uid(), fornecedor_id:f3.id, numero_debito:'DEB-218', data_emissao:d(-45), valor:1100.00, motivo:'Bonificação não aplicada', data_vencimento:d(-15), status:'Em aberto'},
+  ];
+  DB.tabelas_precos = [
+    {id:uid(), fornecedor_id:f1.id, data_ultima_atualizacao:d(-100), responsavel_atualizacao:'Marina Alves', validade:d(-5)},
+    {id:uid(), fornecedor_id:f2.id, data_ultima_atualizacao:d(-10), responsavel_atualizacao:'João Prado', validade:d(80)},
+    {id:uid(), fornecedor_id:f3.id, data_ultima_atualizacao:d(-40), responsavel_atualizacao:'Marina Alves', validade:d(10)},
+  ];
+  DB.embalagem_master = [
+    {id:uid(), fornecedor_id:f1.id, cadastrado:true},
+    {id:uid(), fornecedor_id:f2.id, cadastrado:false},
+    {id:uid(), fornecedor_id:f3.id, cadastrado:true},
+  ];
+  DB.xped_ocorrencias = [
+    {id:uid(), fornecedor_id:f3.id, data_ocorrencia:d(-3), produto:'Refrigerante 2L', codigo:'REF-2000', motivo:'Código não localizado'},
+    {id:uid(), fornecedor_id:f3.id, data_ocorrencia:d(-8), produto:'Suco 1L', codigo:'SUC-1000', motivo:'Divergência de XPED'},
+  ];
+}
+if (DEMO_MODE) seedDemo();
+
+/* ============================================================
+   CAMADA DE DADOS (troca automaticamente entre Supabase e local)
+   ============================================================ */
+async function loadAll(){
+  if (DEMO_MODE) return;
+  const tables = ['fornecedores','nfds','debitos','tabelas_precos','embalagem_master','xped_ocorrencias'];
+  for (const t of tables){
+    const { data, error } = await supa.from(t).select('*');
+    if (!error) DB[t] = data || [];
+  }
+}
+
+async function insertRow(table, row){
+  if (DEMO_MODE){ row.id = uid(); DB[table].push(row); return row; }
+  const { data, error } = await supa.from(table).insert(row).select().single();
+  if (error) { alert('Erro ao salvar: ' + error.message); return null; }
+  DB[table].push(data);
+  return data;
+}
+
+async function updateRow(table, id, patch){
+  if (DEMO_MODE){
+    const idx = DB[table].findIndex(r=>r.id===id);
+    if (idx>-1) DB[table][idx] = {...DB[table][idx], ...patch};
+    return DB[table][idx];
+  }
+  const { data, error } = await supa.from(table).update(patch).eq('id', id).select().single();
+  if (error) { alert('Erro ao atualizar: ' + error.message); return null; }
+  const idx = DB[table].findIndex(r=>r.id===id);
+  if (idx>-1) DB[table][idx] = data;
+  return data;
+}
+
+/* ============================================================
+   REGRAS DE NEGÓCIO / CÁLCULOS
+   ============================================================ */
+function tabelaStatus(t){
+  const hoje = new Date().toISOString().slice(0,10);
+  const in15 = new Date(); in15.setDate(in15.getDate()+15);
+  if (t.validade < hoje) return 'Vencida';
+  if (t.validade <= in15.toISOString().slice(0,10)) return 'Próxima do vencimento';
+  return 'Atualizada';
+}
+
+function debitoStatusVisual(d){
+  if (d.status === 'Resolvido') return 'Resolvido';
+  const hoje = new Date().toISOString().slice(0,10);
+  const in7 = new Date(); in7.setDate(in7.getDate()+7);
+  if (d.data_vencimento < hoje) return 'Vencido';
+  if (d.data_vencimento <= in7.toISOString().slice(0,10)) return 'A vencer';
+  return 'Em aberto';
+}
+
+function calcularScore(fid){
+  let score = 100;
+  const detalhes = [];
+
+  const nfdPend = DB.nfds.filter(n=>n.fornecedor_id===fid && n.situacao==='Pendente').length;
+  if (nfdPend>0){ score -= nfdPend*10; detalhes.push(`${nfdPend} NFD(s) pendente(s): -${nfdPend*10}`); }
+
+  const debVenc = DB.debitos.filter(d=>d.fornecedor_id===fid && debitoStatusVisual(d)==='Vencido').length;
+  if (debVenc>0){ score -= debVenc*20; detalhes.push(`${debVenc} débito(s) vencido(s): -${debVenc*20}`); }
+
+  const tabelas = DB.tabelas_precos.filter(t=>t.fornecedor_id===fid);
+  const ultima = tabelas.sort((a,b)=> b.data_ultima_atualizacao.localeCompare(a.data_ultima_atualizacao))[0];
+  if (ultima && tabelaStatus(ultima)==='Vencida'){ score -= 15; detalhes.push('Tabela de preços vencida: -15'); }
+
+  const emb = DB.embalagem_master.find(e=>e.fornecedor_id===fid);
+  if (!emb || !emb.cadastrado){ score -= 10; detalhes.push('Sem embalagem master cadastrada: -10'); }
+
+  const hoje = new Date(); const d30 = new Date(); d30.setDate(hoje.getDate()-30);
+  const xped30 = DB.xped_ocorrencias.filter(x=>x.fornecedor_id===fid && x.data_ocorrencia >= d30.toISOString().slice(0,10)).length;
+  if (xped30>0){ score -= xped30*5; detalhes.push(`${xped30} ocorrência(s) de XPED (30d): -${xped30*5}`); }
+
+  score = Math.max(0, score);
+  if (detalhes.length===0) detalhes.push('Nenhuma pendência — pontuação máxima.');
+  return { score, detalhes };
+}
+
+function classificacao(score){
+  if (score>=90) return {label:'Excelente', cls:'green'};
+  if (score>=75) return {label:'Bom', cls:'green'};
+  if (score>=60) return {label:'Atenção', cls:'amber'};
+  return {label:'Crítico', cls:'red'};
+}
+
+function fmtMoney(v){ return (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+function fmtDate(v){ if(!v) return '-'; const [y,m,d]=v.split('-'); return `${d}/${m}/${y}`; }
+
+/* ============================================================
+   NAVEGAÇÃO
+   ============================================================ */
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click', ()=>{
+    document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
+    item.classList.add('active');
+    document.querySelectorAll('[id^="view-"]').forEach(v=>v.style.display='none');
+    document.getElementById('view-'+item.dataset.view).style.display='block';
+    if (item.dataset.view==='dashboard') renderDashboard();
+    if (item.dataset.view==='fornecedores') renderFornecedoresTable();
+    if (item.dataset.view==='nfdview') renderNfdView();
+    if (item.dataset.view==='xped') renderXpedTable();
+  });
+});
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+function renderDashboard(){
+  const totalForn = DB.fornecedores.length;
+  const nfdPendentes = DB.nfds.filter(n=>n.situacao==='Pendente');
+  const nfdPendValor = nfdPendentes.reduce((s,n)=>s+Number(n.valor),0);
+  const fornComNfd = new Set(nfdPendentes.map(n=>n.fornecedor_id)).size;
+  const debVencidos = DB.debitos.filter(d=>debitoStatusVisual(d)==='Vencido').length;
+  const debAVencer = DB.debitos.filter(d=>debitoStatusVisual(d)==='A vencer').length;
+  const tabelasVencidas = DB.tabelas_precos.filter(t=>tabelaStatus(t)==='Vencida').length;
+  const semEmbalagem = DB.fornecedores.filter(f=>{
+    const e = DB.embalagem_master.find(x=>x.fornecedor_id===f.id);
+    return !e || !e.cadastrado;
+  }).length;
+  const hoje=new Date(); const d30=new Date(); d30.setDate(hoje.getDate()-30);
+  const xpedQtd = DB.xped_ocorrencias.filter(x=>x.data_ocorrencia>=d30.toISOString().slice(0,10)).length;
+  const fornComXped = new Set(DB.xped_ocorrencias.filter(x=>x.data_ocorrencia>=d30.toISOString().slice(0,10)).map(x=>x.fornecedor_id)).size;
+
+  const cards = [
+    {label:'Total de fornecedores', value:totalForn, foot:`${DB.fornecedores.filter(f=>f.status==='Ativo').length} ativos`},
+    {label:'Fornecedores c/ NFD pendente', value:fornComNfd, foot:`${nfdPendentes.length} nota(s) em aberto`, cls: fornComNfd>0?'warn':''},
+    {label:'Valor total NFD pendente', value:fmtMoney(nfdPendValor), foot:'a recuperar', cls: nfdPendValor>0?'warn':''},
+    {label:'Débitos vencidos', value:debVencidos, foot:'cobrar imediatamente', cls: debVencidos>0?'alert':''},
+    {label:'Débitos a vencer (7d)', value:debAVencer, foot:'acompanhar prazo', cls: debAVencer>0?'warn':''},
+    {label:'Tabelas de preço vencidas', value:tabelasVencidas, foot:'solicitar atualização', cls: tabelasVencidas>0?'alert':''},
+    {label:'Sem embalagem master', value:semEmbalagem, foot:`de ${totalForn} fornecedores`, cls: semEmbalagem>0?'warn':''},
+    {label:'Fornecedores c/ XPED (30d)', value:fornComXped, foot:`${xpedQtd} ocorrência(s)`, cls: fornComXped>0?'warn':''},
+  ];
+  document.getElementById('cardsRow').innerHTML = cards.map(c=>`
+    <div class="card ${c.cls||''}">
+      <div class="label">${c.label}</div>
+      <div class="value">${c.value}</div>
+      <div class="foot">${c.foot}</div>
+    </div>`).join('');
+
+  renderChartNfdEvolucao();
+  renderChartConformidade(totalForn, fornComNfd, debVencidos, tabelasVencidas, semEmbalagem);
+  renderChartRankings();
+}
+
+let chartRefs = {};
+function destroyChart(key){ if(chartRefs[key]){ chartRefs[key].destroy(); } }
+
+function renderChartNfdEvolucao(){
+  const months = [];
+  for(let i=5;i>=0;i--){ const d=new Date(); d.setMonth(d.getMonth()-i); months.push(d.toISOString().slice(0,7)); }
+  const valores = months.map(m => DB.nfds.filter(n=>n.data_emissao.slice(0,7)===m).reduce((s,n)=>s+Number(n.valor),0));
+  const qtd = months.map(m => DB.nfds.filter(n=>n.data_emissao.slice(0,7)===m).length);
+  destroyChart('nfd');
+  chartRefs.nfd = new Chart(document.getElementById('chartNfd'), {
+    type:'bar',
+    data:{ labels: months.map(m=>{const [y,mo]=m.split('-'); return mo+'/'+y.slice(2);}),
+      datasets:[
+        {label:'Valor (R$)', data:valores, backgroundColor:'#1F5D4A', borderRadius:4, yAxisID:'y'},
+      ]},
+    options:{ responsive:true, plugins:{legend:{display:false}},
+      scales:{ y:{ ticks:{ callback:v=>'R$ '+v } } } }
+  });
+}
+
+function renderChartConformidade(total, comNfd, debVenc, tabVenc, semEmb){
+  const pct = (bad)=> total? Math.round(((total-bad)/total)*100) : 100;
+  destroyChart('conf');
+  chartRefs.conf = new Chart(document.getElementById('chartConformidade'), {
+    type:'bar',
+    data:{ labels:['NFD em dia','Débitos em dia','Tabela atualizada','Embalagem master'],
+      datasets:[{ data:[pct(comNfd), pct(DB.fornecedores.filter(f=>DB.debitos.some(d=>d.fornecedor_id===f.id && debitoStatusVisual(d)==='Vencido')).length), pct(tabVenc), pct(semEmb)],
+        backgroundColor:['#1F5D4A','#2C5A8C','#B4791F','#5B6960'], borderRadius:4 }]},
+    options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}}, scales:{x:{max:100, ticks:{callback:v=>v+'%'}}} }
+  });
+}
+
+function renderChartRankings(){
+  const withScore = DB.fornecedores.map(f=>{
+    const nfd = DB.nfds.filter(n=>n.fornecedor_id===f.id && n.situacao==='Pendente').length;
+    const deb = DB.debitos.filter(d=>d.fornecedor_id===f.id && d.status==='Em aberto').length;
+    const {score} = calcularScore(f.id);
+    return {nome:f.nome, pend: nfd+deb, score};
+  });
+  const topPend = [...withScore].sort((a,b)=>b.pend-a.pend).slice(0,6);
+  const topEfic = [...withScore].sort((a,b)=>b.score-a.score).slice(0,6);
+
+  destroyChart('rankPend');
+  chartRefs.rankPend = new Chart(document.getElementById('chartRankingPend'), {
+    type:'bar',
+    data:{ labels: topPend.map(f=>f.nome.length>18?f.nome.slice(0,18)+'…':f.nome), datasets:[{data:topPend.map(f=>f.pend), backgroundColor:'#B23A2E', borderRadius:4}]},
+    options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}} }
+  });
+
+  destroyChart('rankEfic');
+  chartRefs.rankEfic = new Chart(document.getElementById('chartRankingEfic'), {
+    type:'bar',
+    data:{ labels: topEfic.map(f=>f.nome.length>18?f.nome.slice(0,18)+'…':f.nome), datasets:[{data:topEfic.map(f=>f.score), backgroundColor:'#1F5D4A', borderRadius:4}]},
+    options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}}, scales:{x:{max:100}} }
+  });
+}
+
+/* ============================================================
+   FORNECEDORES — LISTAGEM
+   ============================================================ */
+function renderFornecedoresTable(){
+  const search = (document.getElementById('fSearch').value||'').toLowerCase();
+  const status = document.getElementById('fStatus').value;
+  const classFilter = document.getElementById('fClass').value;
+
+  let list = DB.fornecedores.filter(f=>{
+    const matchSearch = f.nome.toLowerCase().includes(search) || f.codigo.toLowerCase().includes(search);
+    const matchStatus = !status || f.status===status;
+    const {score} = calcularScore(f.id);
+    const {label} = classificacao(score);
+    const matchClass = !classFilter || label===classFilter;
+    return matchSearch && matchStatus && matchClass;
+  });
+
+  const tbody = document.getElementById('fornecedoresTbody');
+  document.getElementById('fornecedoresEmpty').style.display = list.length? 'none':'block';
+
+  tbody.innerHTML = list.map(f=>{
+    const {score} = calcularScore(f.id);
+    const {label, cls} = classificacao(score);
+    return `<tr class="clickable" onclick="openDrawer('${f.id}')">
+      <td class="figure">${f.codigo}</td>
+      <td>${f.nome}</td>
+      <td>${f.comprador_responsavel||'-'}</td>
+      <td>${f.categoria||'-'}</td>
+      <td><span class="badge ${f.status==='Ativo'?'green':'gray'}">${f.status}</span></td>
+      <td class="figure">${score}</td>
+      <td><span class="badge ${cls}">${label}</span></td>
+      <td class="mini-actions" onclick="event.stopPropagation()">
+        <button class="btn ghost small" onclick="editFornecedor('${f.id}')">Editar</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ---------- Modal fornecedor ---------- */
+let editingFornecedorId = null;
+function openFornecedorModal(){
+  editingFornecedorId = null;
+  document.getElementById('modalFornecedorTitle').textContent = 'Novo fornecedor';
+  ['mf_codigo','mf_nome','mf_comprador','mf_categoria','mf_obs'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('mf_status').value = 'Ativo';
+  openModal('modalFornecedor');
+}
+function editFornecedor(id){
+  const f = DB.fornecedores.find(x=>x.id===id);
+  editingFornecedorId = id;
+  document.getElementById('modalFornecedorTitle').textContent = 'Editar fornecedor';
+  document.getElementById('mf_codigo').value = f.codigo;
+  document.getElementById('mf_nome').value = f.nome;
+  document.getElementById('mf_comprador').value = f.comprador_responsavel||'';
+  document.getElementById('mf_categoria').value = f.categoria||'';
+  document.getElementById('mf_status').value = f.status;
+  document.getElementById('mf_obs').value = f.observacoes||'';
+  openModal('modalFornecedor');
+}
+function editFornecedorFromDrawer(){ editFornecedor(currentFornecedorId); }
+
+async function saveFornecedor(){
+  const payload = {
+    codigo: document.getElementById('mf_codigo').value.trim(),
+    nome: document.getElementById('mf_nome').value.trim(),
+    comprador_responsavel: document.getElementById('mf_comprador').value.trim(),
+    categoria: document.getElementById('mf_categoria').value.trim(),
+    status: document.getElementById('mf_status').value,
+    observacoes: document.getElementById('mf_obs').value.trim(),
+  };
+  if (!payload.codigo || !payload.nome){ alert('Preencha código e nome.'); return; }
+
+  if (editingFornecedorId){
+    await updateRow('fornecedores', editingFornecedorId, payload);
+  } else {
+    await insertRow('fornecedores', payload);
+  }
+  closeModal('modalFornecedor');
+  renderFornecedoresTable();
+  renderDashboard();
+}
+
+/* ============================================================
+   DRAWER — DETALHE DO FORNECEDOR
+   ============================================================ */
+let currentFornecedorId = null;
+let currentTab = 'nfd';
+
+function openDrawer(id){
+  currentFornecedorId = id;
+  currentTab = 'nfd';
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelector('.tab[data-tab="nfd"]').classList.add('active');
+  renderDrawer();
+  document.getElementById('drawerOverlay').classList.add('open');
+}
+function closeDrawer(){ document.getElementById('drawerOverlay').classList.remove('open'); renderFornecedoresTable(); renderDashboard(); }
+
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    currentTab = tab.dataset.tab;
+    renderTabContent();
+  });
+});
+
+function renderDrawer(){
+  const f = DB.fornecedores.find(x=>x.id===currentFornecedorId);
+  document.getElementById('drawerNome').textContent = f.nome;
+  const codigosErp = (f.codigos_erp && f.codigos_erp.length) ? ` · códigos ERP: ${f.codigos_erp.join(', ')}` : '';
+  document.getElementById('drawerSub').textContent = `${f.codigo} · ${f.categoria||'sem categoria'} · comprador: ${f.comprador_responsavel||'-'}${codigosErp}`;
+
+  const {score, detalhes} = calcularScore(f.id);
+  const {label, cls} = classificacao(score);
+  document.getElementById('gaugeScore').textContent = score;
+  document.getElementById('gaugeScore').style.color = cls==='green'?'#1F5D4A':cls==='amber'?'#B4791F':'#B23A2E';
+  document.getElementById('gaugeBadge').className = 'badge '+cls;
+  document.getElementById('gaugeBadge').textContent = label;
+  document.getElementById('scoreBreakdown').innerHTML = detalhes.map(d=>'• '+d).join('<br>');
+  drawGauge(score, cls);
+  renderTabContent();
+}
+
+function drawGauge(score, cls){
+  const canvas = document.getElementById('gaugeCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,120,120);
+  const color = cls==='green'?'#1F5D4A':cls==='amber'?'#B4791F':'#B23A2E';
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = '#E1E4DE';
+  ctx.beginPath(); ctx.arc(60,60,48,0.75*Math.PI, 2.25*Math.PI); ctx.stroke();
+  ctx.strokeStyle = color;
+  const end = 0.75*Math.PI + (score/100)*1.5*Math.PI;
+  ctx.beginPath(); ctx.arc(60,60,48,0.75*Math.PI, end); ctx.stroke();
+}
+
+function renderTabContent(){
+  const f = currentFornecedorId;
+  const el = document.getElementById('tabContent');
+  if (currentTab==='nfd'){
+    const rows = DB.nfds.filter(n=>n.fornecedor_id===f);
+    el.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button class="btn small" onclick="openNfdModal()">+ Nova NFD</button></div>
+      <table><thead><tr><th>Número</th><th>Emissão</th><th>Valor</th><th>Situação</th><th>Tratativa</th><th>Prazo</th><th></th></tr></thead>
+      <tbody>${rows.length? rows.map(n=>{
+        const prazoSt = nfdPrazoStatus(n);
+        let prazoHtml = n.prazo_resolucao ? fmtDate(n.prazo_resolucao) : '-';
+        if (prazoSt==='vencida') prazoHtml = `<span class="badge red">vencida</span>`;
+        else if (prazoSt==='a_vencer') prazoHtml = `<span class="badge amber">${fmtDate(n.prazo_resolucao)}</span>`;
+        return `<tr>
+          <td class="figure">${n.numero_nfd}</td><td>${fmtDate(n.data_emissao)}</td><td class="figure">${fmtMoney(n.valor)}</td>
+          <td><span class="badge ${n.situacao==='Pago'?'green':n.situacao==='Em negociação'?'blue':'amber'}">${n.situacao}</span></td>
+          <td style="max-width:180px;">${n.trativa_negociada||'-'}</td>
+          <td>${prazoHtml}</td>
+          <td><button class="btn ghost small" onclick="editNfd('${n.id}')">Editar</button></td>
+        </tr>`;
+      }).join('') : `<tr><td colspan="7" class="empty">Nenhuma NFD registrada.</td></tr>`}
+      </tbody></table>`;
+  }
+  if (currentTab==='debitos'){
+    const rows = DB.debitos.filter(d=>d.fornecedor_id===f);
+    el.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button class="btn small" onclick="openDebitoModal()">+ Novo débito</button></div>
+      <table><thead><tr><th>Número</th><th>Emissão</th><th>Valor</th><th>Vencimento</th><th>Status</th><th></th></tr></thead>
+      <tbody>${rows.length? rows.map(d=>{
+        const st = debitoStatusVisual(d);
+        const cls = st==='Vencido'?'red':st==='A vencer'?'amber':st==='Resolvido'?'green':'gray';
+        return `<tr>
+          <td class="figure">${d.numero_debito}</td><td>${fmtDate(d.data_emissao)}</td><td class="figure">${fmtMoney(d.valor)}</td>
+          <td>${fmtDate(d.data_vencimento)}</td>
+          <td><span class="badge ${cls}">${st}</span></td>
+          <td><button class="btn ghost small" onclick="editDebito('${d.id}')">Editar</button></td>
+        </tr>`;
+      }).join('') : `<tr><td colspan="6" class="empty">Nenhum débito registrado.</td></tr>`}
+      </tbody></table>`;
+  }
+  if (currentTab==='tabela'){
+    const rows = DB.tabelas_precos.filter(t=>t.fornecedor_id===f).sort((a,b)=>b.data_ultima_atualizacao.localeCompare(a.data_ultima_atualizacao));
+    el.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button class="btn small" onclick="openTabelaModal()">+ Registrar atualização</button></div>
+      <table><thead><tr><th>Última atualização</th><th>Responsável</th><th>Validade</th><th>Status</th></tr></thead>
+      <tbody>${rows.length? rows.map(t=>{
+        const st = tabelaStatus(t);
+        const cls = st==='Vencida'?'red':st==='Próxima do vencimento'?'amber':'green';
+        return `<tr><td>${fmtDate(t.data_ultima_atualizacao)}</td><td>${t.responsavel_atualizacao||'-'}</td><td>${fmtDate(t.validade)}</td><td><span class="badge ${cls}">${st}</span></td></tr>`;
+      }).join('') : `<tr><td colspan="4" class="empty">Nenhum registro de tabela de preços.</td></tr>`}
+      </tbody></table>`;
+  }
+  if (currentTab==='embalagem'){
+    const emb = DB.embalagem_master.find(e=>e.fornecedor_id===f);
+    const cadastrado = emb? emb.cadastrado : false;
+    el.innerHTML = `
+      <div class="panel" style="border:none;padding:0;">
+        <p style="font-size:13px;color:var(--ink-soft);">Este fornecedor possui embalagem master cadastrada?</p>
+        <div style="display:flex;gap:10px;">
+          <button class="btn ${cadastrado?'':'ghost'}" onclick="setEmbalagem(true)">Sim</button>
+          <button class="btn ${!cadastrado?'danger':'ghost'}" onclick="setEmbalagem(false)">Não</button>
+        </div>
+        ${emb && emb.data_verificacao? `<p style="font-size:12px;color:var(--ink-soft);margin-top:10px;">Última verificação: ${fmtDate(emb.data_verificacao)}</p>`:''}
+      </div>`;
+  }
+  if (currentTab==='xped'){
+    const rows = DB.xped_ocorrencias.filter(x=>x.fornecedor_id===f).sort((a,b)=>b.data_ocorrencia.localeCompare(a.data_ocorrencia));
+    el.innerHTML = `
+      <table><thead><tr><th>Data</th><th>Produto</th><th>Código</th><th>Motivo</th></tr></thead>
+      <tbody>${rows.length? rows.map(x=>`<tr><td>${fmtDate(x.data_ocorrencia)}</td><td>${x.produto}</td><td class="figure">${x.codigo||'-'}</td><td>${x.motivo||'-'}</td></tr>`).join('') : `<tr><td colspan="4" class="empty">Nenhuma ocorrência de XPED para este fornecedor.</td></tr>`}
+      </tbody></table>
+      <p style="font-size:12px;color:var(--ink-soft);margin-top:10px;">Ocorrências de XPED são importadas na tela "Importar XPED" a partir do relatório diário.</p>`;
+  }
+}
+
+/* ---------- NFD ---------- */
+let editingNfdId = null;
+let nfdModalMode = 'drawer'; // 'drawer' (dentro do painel do fornecedor) ou 'global' (tela Indicador NFD)
+
+function openNfdModal(global){
+  editingNfdId = null;
+  nfdModalMode = global ? 'global' : 'drawer';
+  ['mn_numero','mn_data','mn_valor','mn_motivo','mn_data_pgto','mn_obs_pgto','mn_tratativa','mn_prazo'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('mn_situacao').value = 'Pendente';
+  document.getElementById('mn_pagamento_fields').style.display = 'none';
+  document.getElementById('mn_importado_info').style.display = 'none';
+
+  const wrap = document.getElementById('mn_fornecedor_wrap');
+  if (nfdModalMode === 'global'){
+    wrap.style.display = 'block';
+    const sel = document.getElementById('mn_fornecedor');
+    sel.innerHTML = DB.fornecedores.map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');
+  } else {
+    wrap.style.display = 'none';
+  }
+  openModal('modalNfd');
+}
+function editNfd(id, global){
+  const n = DB.nfds.find(x=>x.id===id);
+  editingNfdId = id;
+  nfdModalMode = global ? 'global' : 'drawer';
+  document.getElementById('mn_numero').value = n.numero_nfd;
+  document.getElementById('mn_data').value = n.data_emissao;
+  document.getElementById('mn_valor').value = n.valor;
+  document.getElementById('mn_motivo').value = n.motivo||'';
+  document.getElementById('mn_situacao').value = n.situacao;
+  document.getElementById('mn_tratativa').value = n.trativa_negociada||'';
+  document.getElementById('mn_prazo').value = n.prazo_resolucao||'';
+  document.getElementById('mn_data_pgto').value = n.data_pagamento||'';
+  document.getElementById('mn_obs_pgto').value = n.observacao_pagamento||'';
+  document.getElementById('mn_pagamento_fields').style.display = n.situacao==='Pago'?'block':'none';
+
+  const wrap = document.getElementById('mn_fornecedor_wrap');
+  if (nfdModalMode === 'global'){
+    wrap.style.display = 'block';
+    const sel = document.getElementById('mn_fornecedor');
+    sel.innerHTML = DB.fornecedores.map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');
+    sel.value = n.fornecedor_id;
+  } else {
+    wrap.style.display = 'none';
+  }
+
+  const infoDiv = document.getElementById('mn_importado_info');
+  if (n.produto_descricao || n.nota_origem || n.cod_fornecedor_origem){
+    infoDiv.style.display = 'block';
+    infoDiv.innerHTML = [
+      n.produto_descricao ? `<strong>Produto:</strong> ${n.produto_descricao} ${n.produto_codigo?'('+n.produto_codigo+')':''}` : null,
+      (n.itens_qtd && n.itens_qtd>1) ? `<strong>Itens na nota:</strong> ${n.itens_qtd}` : null,
+      n.nota_origem ? `<strong>Nota de origem:</strong> ${n.nota_origem}${n.filial_nfo?' · Filial NFO '+n.filial_nfo:''}` : null,
+      n.filial_nfd ? `<strong>Filial NFD:</strong> ${n.filial_nfd}` : null,
+      n.email_enviado!=null ? `<strong>E-mail enviado ao fornecedor:</strong> ${n.email_enviado?'Sim':'Não'}${n.ultimo_email?' · último em '+new Date(n.ultimo_email).toLocaleDateString('pt-BR'):''}` : null,
+    ].filter(Boolean).join('<br>');
+  } else {
+    infoDiv.style.display = 'none';
+  }
+  openModal('modalNfd');
+}
+document.getElementById('mn_situacao').addEventListener('change', (e)=>{
+  document.getElementById('mn_pagamento_fields').style.display = e.target.value==='Pago' ? 'block':'none';
+});
+async function saveNfd(){
+  const fornecedorId = nfdModalMode === 'global' ? document.getElementById('mn_fornecedor').value : currentFornecedorId;
+  if (!fornecedorId){ alert('Selecione um fornecedor.'); return; }
+  const payload = {
+    fornecedor_id: fornecedorId,
+    numero_nfd: document.getElementById('mn_numero').value.trim(),
+    data_emissao: document.getElementById('mn_data').value,
+    valor: parseFloat(document.getElementById('mn_valor').value)||0,
+    motivo: document.getElementById('mn_motivo').value.trim(),
+    situacao: document.getElementById('mn_situacao').value,
+    trativa_negociada: document.getElementById('mn_tratativa').value.trim(),
+    prazo_resolucao: document.getElementById('mn_prazo').value || null,
+    data_pagamento: document.getElementById('mn_data_pgto').value || null,
+    observacao_pagamento: document.getElementById('mn_obs_pgto').value.trim(),
+  };
+  if (!payload.numero_nfd || !payload.data_emissao){ alert('Preencha número e data de emissão.'); return; }
+  if (editingNfdId) await updateRow('nfds', editingNfdId, payload);
+  else await insertRow('nfds', payload);
+  closeModal('modalNfd');
+  if (nfdModalMode === 'global') renderNfdView();
+  else renderDrawer();
+}
+
+/* ---------- Indicador NFD (dashboard dedicado) ---------- */
+let nfdSelectedFornecedor = null;
+let nfdSelecionadas = new Set();
+
+function nfdPrazoStatus(n){
+  if (n.situacao === 'Pago' || !n.prazo_resolucao) return null;
+  const hoje = new Date().toISOString().slice(0,10);
+  const in7 = new Date(); in7.setDate(in7.getDate()+7);
+  if (n.prazo_resolucao < hoje) return 'vencida';
+  if (n.prazo_resolucao <= in7.toISOString().slice(0,10)) return 'a_vencer';
+  return 'em_dia';
+}
+
+function selectNfdFornecedor(id){
+  nfdSelectedFornecedor = id;
+  renderNfdView();
+}
+
+function renderNfdFornecedorCards(){
+  const porFornecedor = {};
+  DB.nfds.forEach(n=>{
+    if (n.situacao==='Pago') return;
+    if (!porFornecedor[n.fornecedor_id]) porFornecedor[n.fornecedor_id] = {valor:0, qtd:0};
+    porFornecedor[n.fornecedor_id].valor += Number(n.valor);
+    porFornecedor[n.fornecedor_id].qtd += 1;
+  });
+  const lista = Object.entries(porFornecedor).map(([id, v])=>{
+    const f = DB.fornecedores.find(x=>x.id===id);
+    return { id, nome: f?f.nome:'Fornecedor removido', ...v };
+  }).sort((a,b)=>b.valor-a.valor);
+
+  const totalValor = lista.reduce((s,x)=>s+x.valor,0);
+  const totalQtd = lista.reduce((s,x)=>s+x.qtd,0);
+
+  const cardsHtml = [
+    `<div class="fcard all ${!nfdSelectedFornecedor?'active':''}" onclick="selectNfdFornecedor(null)">
+      <div class="fname">Todos os fornecedores</div>
+      <div class="fval">${fmtMoney(totalValor)}</div>
+      <div class="fqtd">${totalQtd} NFD(s) em aberto</div>
+    </div>`,
+    ...lista.map(f=>`
+      <div class="fcard ${nfdSelectedFornecedor===f.id?'active':''}" onclick="selectNfdFornecedor('${f.id}')">
+        <div class="fname" title="${f.nome}">${f.nome}</div>
+        <div class="fval">${fmtMoney(f.valor)}</div>
+        <div class="fqtd">${f.qtd} NFD(s) em aberto</div>
+      </div>`)
+  ].join('');
+  document.getElementById('nfdFornecedorCards').innerHTML = cardsHtml;
+}
+
+function renderNfdView(){
+  const base = nfdSelectedFornecedor ? DB.nfds.filter(n=>n.fornecedor_id===nfdSelectedFornecedor) : DB.nfds;
+  const pendentes = base.filter(n=>n.situacao!=='Pago');
+  const valorPendente = pendentes.reduce((s,n)=>s+Number(n.valor),0);
+  const pagos = base.filter(n=>n.situacao==='Pago' && n.data_pagamento);
+  const tempoMedio = pagos.length ? Math.round(pagos.reduce((s,n)=>{
+    const d1 = new Date(n.data_emissao), d2 = new Date(n.data_pagamento);
+    return s + (d2-d1)/(1000*60*60*24);
+  },0)/pagos.length) : null;
+  const tratativasVencidas = base.filter(n=>nfdPrazoStatus(n)==='vencida').length;
+
+  document.getElementById('nfdCardsRow').innerHTML = `
+    <div class="card ${valorPendente>0?'warn':''}"><div class="label">Valor total pendente</div><div class="value">${fmtMoney(valorPendente)}</div><div class="foot">${pendentes.length} nota(s) em aberto</div></div>
+    <div class="card"><div class="label">NFDs em aberto</div><div class="value">${pendentes.length}</div><div class="foot">pendente + em negociação</div></div>
+    <div class="card"><div class="label">Tempo médio de pagamento</div><div class="value">${tempoMedio!=null?tempoMedio+' d':'-'}</div><div class="foot">média das notas já pagas</div></div>
+    <div class="card ${tratativasVencidas>0?'alert':''}"><div class="label">Tratativas vencidas</div><div class="value">${tratativasVencidas}</div><div class="foot">prazo estourado sem pagamento</div></div>
+  `;
+
+  renderNfdFornecedorCards();
+
+  const search = (document.getElementById('nfdSearch').value||'').toLowerCase();
+  const situacaoFiltro = document.getElementById('nfdSituacaoFiltro').value;
+  const prazoFiltro = document.getElementById('nfdPrazoFiltro').value;
+
+  let rows = DB.nfds.map(n=>({...n, forn: DB.fornecedores.find(f=>f.id===n.fornecedor_id)}));
+  rows = rows.filter(n=>{
+    const matchFornecedor = !nfdSelectedFornecedor || n.fornecedor_id===nfdSelectedFornecedor;
+    const matchSearch = !search || (n.forn && n.forn.nome.toLowerCase().includes(search)) || n.numero_nfd.toLowerCase().includes(search);
+    const matchSituacao = !situacaoFiltro || n.situacao===situacaoFiltro;
+    const matchPrazo = !prazoFiltro || nfdPrazoStatus(n)===prazoFiltro;
+    return matchFornecedor && matchSearch && matchSituacao && matchPrazo;
+  }).sort((a,b)=> b.data_emissao.localeCompare(a.data_emissao));
+
+  document.getElementById('nfdViewEmpty').style.display = rows.length? 'none':'block';
+  document.getElementById('nfdViewTbody').innerHTML = rows.map(n=>{
+    const situCls = n.situacao==='Pago'?'green':n.situacao==='Em negociação'?'blue':'amber';
+    const prazoSt = nfdPrazoStatus(n);
+    let prazoHtml = n.prazo_resolucao ? fmtDate(n.prazo_resolucao) : '-';
+    if (prazoSt==='vencida') prazoHtml = `<span class="badge red">${fmtDate(n.prazo_resolucao)} · vencida</span>`;
+    else if (prazoSt==='a_vencer') prazoHtml = `<span class="badge amber">${fmtDate(n.prazo_resolucao)} · a vencer</span>`;
+    return `<tr>
+      <td><input type="checkbox" class="nfd-check" data-id="${n.id}" ${nfdSelecionadas.has(n.id)?'checked':''} onchange="toggleSelectNfd('${n.id}', this.checked)"></td>
+      <td>${n.forn?n.forn.nome:'-'}</td>
+      <td class="figure">${n.numero_nfd}</td>
+      <td class="figure">${n.filial_nfd||'-'}</td>
+      <td class="figure">${n.nota_origem||'-'}</td>
+      <td>${fmtDate(n.data_emissao)}</td>
+      <td class="figure">${fmtMoney(n.valor)}</td>
+      <td><span class="badge ${situCls}">${n.situacao}</span></td>
+      <td>${n.trativa_negociada || '<span style="color:var(--ink-soft);">sem tratativa registrada</span>'}</td>
+      <td>${prazoHtml}</td>
+      <td><button class="btn ghost small" onclick="editNfd('${n.id}', true)">Editar</button></td>
+    </tr>`;
+  }).join('');
+  atualizarBotaoLote();
+}
+
+function toggleSelectNfd(id, checked){
+  if (checked) nfdSelecionadas.add(id); else nfdSelecionadas.delete(id);
+  atualizarBotaoLote();
+}
+function toggleSelectAllNfd(checked){
+  document.querySelectorAll('.nfd-check').forEach(cb=>{
+    cb.checked = checked;
+    if (checked) nfdSelecionadas.add(cb.dataset.id); else nfdSelecionadas.delete(cb.dataset.id);
+  });
+  atualizarBotaoLote();
+}
+function atualizarBotaoLote(){
+  const btn = document.getElementById('btnAplicarTratativaLote');
+  const qtd = nfdSelecionadas.size;
+  document.getElementById('qtdSelecionadasNfd').textContent = qtd;
+  btn.style.display = qtd>0 ? 'inline-block' : 'none';
+}
+function openTratativaLoteModal(){
+  document.getElementById('qtdSelecionadasLote').textContent = nfdSelecionadas.size;
+  document.getElementById('ml_tratativa').value = '';
+  document.getElementById('ml_prazo').value = '';
+  document.getElementById('ml_situacao').value = '';
+  openModal('modalTratativaLote');
+}
+async function aplicarTratativaLote(){
+  const tratativa = document.getElementById('ml_tratativa').value.trim();
+  const prazo = document.getElementById('ml_prazo').value || null;
+  const situacao = document.getElementById('ml_situacao').value;
+  const patch = {};
+  if (tratativa) patch.trativa_negociada = tratativa;
+  if (prazo) patch.prazo_resolucao = prazo;
+  if (situacao) patch.situacao = situacao;
+  if (Object.keys(patch).length === 0){ alert('Preencha ao menos um campo para aplicar.'); return; }
+  for (const id of nfdSelecionadas){
+    await updateRow('nfds', id, patch);
+  }
+  nfdSelecionadas.clear();
+  closeModal('modalTratativaLote');
+  renderNfdView();
+}
+
+/* ---------- Débito ---------- */
+let editingDebitoId = null;
+function calcVencimento(){
+  const data = document.getElementById('md_data').value;
+  if (!data) return;
+  const dt = new Date(data+'T00:00:00'); dt.setDate(dt.getDate()+30);
+  document.getElementById('md_venc').value = dt.toISOString().slice(0,10);
+}
+function toggleResolucaoFields(){
+  document.getElementById('md_resolucao_fields').style.display = document.getElementById('md_status').value==='Resolvido' ? 'block':'none';
+}
+function openDebitoModal(){
+  editingDebitoId = null;
+  ['md_numero','md_data','md_valor','md_venc','md_motivo','md_data_res','md_obs_res'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('md_status').value = 'Em aberto';
+  document.getElementById('md_resolucao_fields').style.display = 'none';
+  openModal('modalDebito');
+}
+function editDebito(id){
+  const d = DB.debitos.find(x=>x.id===id);
+  editingDebitoId = id;
+  document.getElementById('md_numero').value = d.numero_debito;
+  document.getElementById('md_data').value = d.data_emissao;
+  document.getElementById('md_valor').value = d.valor;
+  document.getElementById('md_venc').value = d.data_vencimento;
+  document.getElementById('md_motivo').value = d.motivo||'';
+  document.getElementById('md_status').value = d.status;
+  document.getElementById('md_tipo_res').value = d.tipo_resolucao||'Pedido bonificado';
+  document.getElementById('md_data_res').value = d.data_resolucao||'';
+  document.getElementById('md_obs_res').value = d.observacao_resolucao||'';
+  toggleResolucaoFields();
+  openModal('modalDebito');
+}
+async function saveDebito(){
+  const payload = {
+    fornecedor_id: currentFornecedorId,
+    numero_debito: document.getElementById('md_numero').value.trim(),
+    data_emissao: document.getElementById('md_data').value,
+    valor: parseFloat(document.getElementById('md_valor').value)||0,
+    data_vencimento: document.getElementById('md_venc').value,
+    motivo: document.getElementById('md_motivo').value.trim(),
+    status: document.getElementById('md_status').value,
+    tipo_resolucao: document.getElementById('md_status').value==='Resolvido' ? document.getElementById('md_tipo_res').value : null,
+    data_resolucao: document.getElementById('md_status').value==='Resolvido' ? (document.getElementById('md_data_res').value||null) : null,
+    observacao_resolucao: document.getElementById('md_obs_res').value.trim(),
+  };
+  if (!payload.numero_debito || !payload.data_emissao || !payload.data_vencimento){ alert('Preencha número, emissão e vencimento.'); return; }
+  if (editingDebitoId) await updateRow('debitos', editingDebitoId, payload);
+  else await insertRow('debitos', payload);
+  closeModal('modalDebito');
+  renderDrawer();
+}
+
+/* ---------- Tabela de preços ---------- */
+function openTabelaModal(){
+  ['mt_data','mt_validade','mt_resp'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('mt_data').value = new Date().toISOString().slice(0,10);
+  openModal('modalTabela');
+}
+async function saveTabela(){
+  const payload = {
+    fornecedor_id: currentFornecedorId,
+    data_ultima_atualizacao: document.getElementById('mt_data').value,
+    validade: document.getElementById('mt_validade').value,
+    responsavel_atualizacao: document.getElementById('mt_resp').value.trim(),
+  };
+  if (!payload.data_ultima_atualizacao || !payload.validade){ alert('Preencha as datas.'); return; }
+  await insertRow('tabelas_precos', payload);
+  closeModal('modalTabela');
+  renderDrawer();
+}
+
+/* ---------- Embalagem master ---------- */
+async function setEmbalagem(valor){
+  const existing = DB.embalagem_master.find(e=>e.fornecedor_id===currentFornecedorId);
+  const payload = { fornecedor_id: currentFornecedorId, cadastrado: valor, data_verificacao: new Date().toISOString().slice(0,10) };
+  if (existing) await updateRow('embalagem_master', existing.id, payload);
+  else await insertRow('embalagem_master', payload);
+  renderDrawer();
+}
+
+/* ============================================================
+   IMPORTAÇÃO NFD (relatório DETALHAMENTO)
+   ============================================================ */
+function normalizeNome(s){ return (s||'').toString().trim().toUpperCase().replace(/\s+/g,' '); }
+
+function excelValueToDateStr(v){
+  if (v instanceof Date) return v.toISOString().slice(0,10);
+  if (typeof v === 'number'){
+    const d = XLSX.SSF.parse_date_code(v);
+    return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+  }
+  if (typeof v === 'string' && v.trim()) return v.trim();
+  return null;
+}
+function excelValueToDateTime(v){
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === 'number'){
+    const d = XLSX.SSF.parse_date_code(v);
+    return new Date(Date.UTC(d.y, d.m-1, d.d, d.H||0, d.M||0, d.S||0)).toISOString();
+  }
+  return null;
+}
+function numToStr(v){
+  if (v===undefined || v===null || v==='') return '';
+  const n = Number(v);
+  if (!isNaN(n) && Number.isInteger(n)) return String(n);
+  return String(v).trim();
+}
+
+async function handleNfdImport(evt){
+  const file = evt.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const data = new Uint8Array(e.target.result);
+    const wb = XLSX.read(data, {type:'array', cellDates:true});
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+
+    /* 1) Agrupar linhas por (fornecedor, numero da NFD) — a planilha traz 1 linha por item/produto */
+    const grupos = new Map();
+    let semNome = 0, semNumero = 0;
+
+    for (const row of rows){
+      const nomeRaw = (row['Fornecedor']||'').toString().trim();
+      if (!nomeRaw){ semNome++; continue; }
+      const numeroNfd = numToStr(row['Nota de Devolução']);
+      if (!numeroNfd){ semNumero++; continue; }
+
+      const chave = normalizeNome(nomeRaw) + '||' + numeroNfd;
+      if (!grupos.has(chave)){
+        grupos.set(chave, {
+          nomeRaw, numeroNfd,
+          codOrigem: numToStr(row['Cód. Fornecedor']),
+          cgc: numToStr(row['CGC']),
+          comprador: (row['Comprador']||'').toString().trim(),
+          filial_nfd: (row['Filial NFD']||'').toString().trim(),
+          filial_nfo: numToStr(row['Filial NFO']),
+          nota_origem: numToStr(row['Nota de Origem']),
+          data_emissao: excelValueToDateStr(row['Data']),
+          valor_total: 0,
+          itens: [],
+          possui_imagem: false,
+          email_enviado: false,
+          destinatarios: new Set(),
+          primeiro_email: null,
+          ultimo_email: null,
+          motivos: new Set(),
+        });
+      }
+      const g = grupos.get(chave);
+      g.valor_total += parseFloat(row['Valor Total']) || 0;
+      g.itens.push({ codigo: numToStr(row['Código']), descricao: (row['Descrição']||'').toString().trim() });
+      if ((row['Possui Imagem?']||'').toString().trim().toUpperCase()==='SIM') g.possui_imagem = true;
+      if ((row['E-mail Enviado']||'').toString().trim().toUpperCase()==='SIM') g.email_enviado = true;
+      if (row['Destinatários']) String(row['Destinatários']).split(';').forEach(d=>{ if(d.trim()) g.destinatarios.add(d.trim()); });
+      if (row['Observação']) g.motivos.add(String(row['Observação']).trim());
+      const pe = excelValueToDateTime(row['Primeiro E-mail']);
+      const ue = excelValueToDateTime(row['Último E-mail']);
+      if (pe && (!g.primeiro_email || pe < g.primeiro_email)) g.primeiro_email = pe;
+      if (ue && (!g.ultimo_email || ue > g.ultimo_email)) g.ultimo_email = ue;
+      const dEmissao = excelValueToDateStr(row['Data']);
+      if (dEmissao && (!g.data_emissao || dEmissao < g.data_emissao)) g.data_emissao = dEmissao;
+    }
+
+    /* 2) Gravar fornecedores e NFDs agregadas */
+    let importadas = 0, duplicadas = 0, fornecedoresCriados = 0;
+
+    for (const g of grupos.values()){
+      const nomeNorm = normalizeNome(g.nomeRaw);
+      let forn = DB.fornecedores.find(f => normalizeNome(f.nome) === nomeNorm);
+      if (!forn){
+        forn = await insertRow('fornecedores', {
+          codigo: g.codOrigem || ('AUTO-' + Math.random().toString(36).slice(2,7)),
+          nome: g.nomeRaw,
+          cgc: g.cgc,
+          codigos_erp: g.codOrigem ? [g.codOrigem] : [],
+          comprador_responsavel: g.comprador,
+          categoria: '',
+          status: 'Ativo',
+          observacoes: ''
+        });
+        fornecedoresCriados++;
+      } else if (g.codOrigem){
+        const codigosAtuais = forn.codigos_erp || [];
+        if (!codigosAtuais.includes(g.codOrigem)){
+          await updateRow('fornecedores', forn.id, { codigos_erp: [...codigosAtuais, g.codOrigem] });
+        }
+      }
+
+      const jaExiste = DB.nfds.some(n => n.fornecedor_id===forn.id && n.numero_nfd===g.numeroNfd);
+      if (jaExiste){ duplicadas++; continue; }
+
+      const primeiroItem = g.itens[0] || {};
+      await insertRow('nfds', {
+        fornecedor_id: forn.id,
+        numero_nfd: g.numeroNfd,
+        data_emissao: g.data_emissao || new Date().toISOString().slice(0,10),
+        valor: Math.round(g.valor_total * 100) / 100,
+        motivo: [...g.motivos].join(' | '),
+        situacao: 'Pendente',
+        cod_fornecedor_origem: g.codOrigem,
+        filial_nfd: g.filial_nfd,
+        filial_nfo: g.filial_nfo,
+        nota_origem: g.nota_origem,
+        produto_codigo: g.itens.length===1 ? primeiroItem.codigo : '',
+        produto_descricao: g.itens.length===1 ? primeiroItem.descricao : `${g.itens.length} itens diferentes`,
+        itens_qtd: g.itens.length,
+        possui_imagem: g.possui_imagem,
+        email_enviado: g.email_enviado,
+        destinatarios: [...g.destinatarios].join('; '),
+        primeiro_email: g.primeiro_email,
+        ultimo_email: g.ultimo_email,
+      });
+      importadas++;
+    }
+
+    document.getElementById('nfdImportLog').innerHTML = `
+      <div class="badge green">${importadas} NFD(s) importada(s)</div>
+      <div class="badge blue" style="margin-left:6px;">${fornecedoresCriados} fornecedor(es) novo(s) criado(s)</div>
+      ${duplicadas? `<div class="badge gray" style="margin-left:6px;">${duplicadas} já existiam (ignoradas)</div>`:''}
+      ${(semNome||semNumero)? `<div style="margin-top:8px;color:var(--red);font-size:12.5px;">${semNome} linha(s) sem fornecedor e ${semNumero} sem número de NFD, ignoradas.</div>`:''}
+    `;
+    renderDashboard();
+    renderFornecedoresTable();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ============================================================
+   IMPORTAÇÃO XPED (Excel/CSV)
+   ============================================================ */
+function renderXpedTable(){
+  const hoje=new Date(); const d30=new Date(); d30.setDate(hoje.getDate()-30);
+  const rows = DB.xped_ocorrencias.filter(x=>x.data_ocorrencia>=d30.toISOString().slice(0,10)).sort((a,b)=>b.data_ocorrencia.localeCompare(a.data_ocorrencia));
+  document.getElementById('xpedEmpty').style.display = rows.length? 'none':'block';
+  document.getElementById('xpedTbody').innerHTML = rows.map(x=>{
+    const f = DB.fornecedores.find(f=>f.id===x.fornecedor_id);
+    return `<tr><td>${fmtDate(x.data_ocorrencia)}</td><td>${f?f.nome:'-'}</td><td>${x.produto}</td><td class="figure">${x.codigo||'-'}</td><td>${x.motivo||'-'}</td></tr>`;
+  }).join('');
+}
+
+function handleXpedImport(evt){
+  const file = evt.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const data = new Uint8Array(e.target.result);
+    const wb = XLSX.read(data, {type:'array'});
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(sheet, {defval:''});
+    let ok = 0; const naoEncontrados = new Set();
+    for (const row of json){
+      const codigo = String(row['Fornecedor'] ?? row['fornecedor'] ?? row['Codigo Fornecedor'] ?? '').trim();
+      const forn = DB.fornecedores.find(f=>f.codigo===codigo);
+      if (!forn){ if(codigo) naoEncontrados.add(codigo); continue; }
+      let dataOcorrencia = row['Data'] ?? row['data'];
+      if (typeof dataOcorrencia === 'number'){
+        const d = XLSX.SSF.parse_date_code(dataOcorrencia);
+        dataOcorrencia = `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+      }
+      await insertRow('xped_ocorrencias', {
+        fornecedor_id: forn.id,
+        data_ocorrencia: dataOcorrencia || new Date().toISOString().slice(0,10),
+        produto: row['Produto'] ?? row['produto'] ?? '',
+        codigo: row['Codigo'] ?? row['codigo'] ?? row['Código'] ?? '',
+        motivo: row['Motivo'] ?? row['motivo'] ?? '',
+      });
+      ok++;
+    }
+    document.getElementById('xpedImportLog').innerHTML = `
+      <div class="badge green">${ok} ocorrência(s) importada(s)</div>
+      ${naoEncontrados.size? `<div style="margin-top:8px;color:var(--red);font-size:12.5px;">Códigos não encontrados: ${[...naoEncontrados].join(', ')}</div>`:''}
+    `;
+    renderXpedTable();
+    renderDashboard();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ============================================================
+   EXPORTAÇÃO EXCEL
+   ============================================================ */
+function exportExcelGeral(){
+  const wb = XLSX.utils.book_new();
+  const fornSheet = DB.fornecedores.map(f=>{
+    const {score} = calcularScore(f.id);
+    const {label} = classificacao(score);
+    return {Codigo:f.codigo, Nome:f.nome, Comprador:f.comprador_responsavel, Categoria:f.categoria, Status:f.status, Score:score, Classificacao:label};
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(fornSheet), 'Fornecedores');
+
+  const nfdSheet = DB.nfds.map(n=>({Fornecedor:(DB.fornecedores.find(f=>f.id===n.fornecedor_id)||{}).nome, Numero:n.numero_nfd, Emissao:n.data_emissao, Valor:n.valor, Situacao:n.situacao, Motivo:n.motivo}));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(nfdSheet), 'NFDs');
+
+  const debSheet = DB.debitos.map(d=>({Fornecedor:(DB.fornecedores.find(f=>f.id===d.fornecedor_id)||{}).nome, Numero:d.numero_debito, Emissao:d.data_emissao, Valor:d.valor, Vencimento:d.data_vencimento, Status:debitoStatusVisual(d)}));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(debSheet), 'Debitos');
+
+  XLSX.writeFile(wb, `painel_fornecedores_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+/* ============================================================
+   HELPERS DE MODAL
+   ============================================================ */
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+/* ============================================================
+   INICIALIZAÇÃO
+   ============================================================ */
+(async function init(){
+  await loadAll();
+  renderDashboard();
+})();
+</script>
+</body>
+</html>
